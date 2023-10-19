@@ -1,0 +1,166 @@
+version: 2.1
+
+# orbs:
+#   docker: circleci/docker@1.7.0
+jobs:
+  test:
+    docker:
+      - image: cimg/python:3.11.1
+        environment:
+          DATABASE_URL: postgresql://postgres@localhost/circle_test?sslmode=disable
+      - image: cimg/postgres:14.0
+        auth:
+          username: mamadousako
+          password: t6C8w\z}sn.a<U/(
+        environment:
+          PGHOST: localhost
+          POSTGRES_USER: postgres
+          POSTGRES_DB: circle_test
+    steps:
+      - checkout
+      - run:
+          name: Wait for db to run
+          command: dockerize -wait tcp://localhost:5432 -timeout 1m
+      - run: sudo apt-get update
+      - run: sudo apt-get install postgresql-client libpq-dev gcc
+      - run: sudo apt-get install -y locales-all
+      - run:
+          name: "test"
+          command: |
+            export STATE=TEST
+            export DB_HOST=localhost
+            export DB_USERNAME=postgres
+            export DB_PORT=5432
+            export DB_PASSWORD=postgres
+            export DB_DATABASE=circle_test
+            pip install -r requirements.txt
+            python manage.py test tests
+  build-docker:
+    docker:
+      - image: cimg/base:stable
+    steps:
+      - checkout
+      - setup_remote_docker:
+          version: 20.10.14
+      - run:
+          name: "Build"
+          command: |
+            echo $IMAGE_SUFFIX
+            IMAGE_NAME=${CIRCLE_PROJECT_REPONAME}
+            docker build . --file Dockerfile --tag ${IMAGE_NAME}
+            docker save ${IMAGE_NAME} --output "${IMAGE_NAME}.tar"
+      - run:
+          name: "Push docker image"
+          command: |
+            IMAGE_NAME=${CIRCLE_PROJECT_REPONAME}
+            DOCKERHUB_NAMESPACE=swapye
+            echo $DOCKERHUB_NAMESPACE | docker login -u "$DO_TOKEN" --password-stdin registry.digitalocean.com/swapye
+            docker load --input "${IMAGE_NAME}.tar"
+            VERSION="${CIRCLE_PROJECT_REPONAME}-0.1.$CIRCLE_BUILD_NUM"
+            IMAGE=${DOCKERHUB_NAMESPACE}/${IMAGE_NAME}
+            docker tag "${IMAGE_NAME}" "registry.digitalocean.com/${IMAGE}:${CIRCLE_BRANCH}"
+            docker push "registry.digitalocean.com/${IMAGE}:${CIRCLE_BRANCH}"
+
+workflows:
+  build:
+    jobs:
+      # - test
+      - build-docker:
+          filters:
+            branches:
+              only:
+                - master
+                - stage
+      # - set-env-master:
+      #     filters:
+      #       branches:
+      #         only:
+      #           - master
+      # - set-env-qa:
+      #     filters:
+      #       branches:
+      #         only:
+      #           - dev
+      # - build
+      # - deploy:
+      #     requires:
+      #       - build
+# workflows:
+#   build:
+#     jobs:
+#       # - test
+#       - build-master
+
+# version: 2.1
+
+# jobs:
+#   set-env-master:
+#     docker:
+#       - image: cimg/node:17.2.0
+#     steps:
+#       - checkout
+#       - run:
+#           name: "I am on master branch"
+#           command: echo "master branch >> ${CIRCLE_BRANCH}"
+#       - run:
+#           name: "Get env"
+#           command: |
+#             export PORT=3000
+
+#     docker:
+#       - image: cimg/node:17.2.0
+#     steps:
+#       - checkout
+#       - run:
+#           name: "I am on dev branch"
+#           command: echo "dev branch >> ${CIRCLE_BRANCH}"
+#       - run:
+#           name: "Get env"
+#           command: |
+#             export PORT=3000
+#   build:
+#     docker:
+#       - image: circleci/buildpack-deps:stretch
+#     steps:
+#       - checkout
+#       - setup_remote_docker:
+#           version: 19.03.13
+#       - run:
+#           name: "Build docker image"
+#           command: |
+#             IMAGE_NAME=${CIRCLE_PROJECT_REPONAME}
+#       - run:
+#           name: "push docker image"
+#           command: |
+#             IMAGE_NAME=${CIRCLE_PROJECT_REPONAME}
+
+#   deploy:
+#     docker:
+#       - image: circleci/buildpack-deps:stretch
+#     steps:
+#       - checkout
+#       - setup_remote_docker:
+#           version: 19.03.13
+#       - run:
+#           name: "Buil and push docker image"
+#           command: ssh -oStrictHostKeyChecking=no -v root@$SSH_IP "./deploy.sh"
+
+# workflows:
+#   build:
+#     jobs:
+#       - set-env-master:
+#           filters:
+#             branches:
+#               only:
+#                 - master
+#       - set-env-qa:
+#           filters:
+#             branches:
+#               only:
+#                 - dev
+#       - build
+#       - deploy:
+#           requires:
+#             - build
+
+# VS Code Extension Version: 1.5.1

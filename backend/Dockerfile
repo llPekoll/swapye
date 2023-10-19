@@ -1,0 +1,23 @@
+FROM python:3.11-slim-buster
+
+RUN adduser --system --group appuser
+COPY ./requirements.txt /app/requirements.txt
+
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends \
+		postgresql-client libpq-dev gcc\
+    && apt-get install -y locales-all vim curl wget\
+	&& rm -rf /var/lib/apt/lists/* 
+
+USER appuser
+WORKDIR /app
+ENV PATH=$PATH:/home/appuser/.local/bin
+
+RUN python -m pip install --upgrade pip
+
+RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install gunicorn
+
+COPY ./ /app
+
+CMD ["gunicorn",  "backend.wsgi"]
